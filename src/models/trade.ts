@@ -1,29 +1,32 @@
-import { Schema, model, Document } from 'mongoose';
+import { Schema, model, Document, Types } from 'mongoose';
 
 export interface ITrade extends Document {
+  user: Types.ObjectId | string;
   asset: string;
   direction: 'LONG' | 'SHORT';
   entryPrice: number;
   stopLoss: number;
   takeProfit: number;
   exitPrice?: number;
-  positionSize?: number; // e.g., lot size or dollar value
-  riskPercentage?: number; // e.g., 1% of account
-  pnl?: number; // monetary profit/loss
-  realizedRR?: number; // realized risk-to-reward
-  plannedRR?: number; // planned risk-to-reward
-  setupType: string; // e.g., 'Silver Bullet', 'MSS + FVG', 'Turtle Soup'
+  lotSize: number; // Strictly contracts/lots for uniform calculation
+  riskPercentage: number; // e.g., 1 for 1%
+  pnl?: number; // Automated calculated monetary profit/loss
+  realizedRR?: number; // Automated realized R-multiple
+  plannedRR?: number; // Automated planned R-multiple
+  status: 'OPEN' | 'CLOSED' | 'CANCELED';
+  setupType: string; // e.g., 'Silver Bullet', 'Turtle Soup'
   timeframe: '1m' | '5m' | '15m' | '1h' | '4h' | '1d' | string;
-  smcElements: string[]; // e.g., ['FVG', 'Liquidity Sweep', 'Order Block']
+  tradingSession: 'ASIA' | 'LONDON' | 'NEW_YORK' | 'CRYPTO_24_7';
+  smcElements: string[]; 
   htfBias: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
-  preTradeMood: string; // e.g., 'Calm', 'FOMO', 'Anxious', 'Impatient'
-  inTradeEmotion?: string; // e.g., 'Greed', 'Fear', 'Detached'
+  preTradeMood: 'Calm/Disciplined' | 'Anxious/FOMO' | 'Revenge Entry' | 'Boredom Trade' | string;
+  inTradeEmotion?: string; 
   disciplineScore: number; // 1 to 5
   confidenceLevel: 'LOW' | 'MEDIUM' | 'HIGH';
   adheredToPlan: boolean;
   exitReason?: 'HIT_SL' | 'HIT_TP' | 'MANUAL_FEAR' | 'MANUAL_TECHNICAL' | 'BREAKEVEN' | string;
   notes?: string;
-  screenshots?: string[]; // array of URLs
+  screenshots?: string[]; 
   tags?: string[];
   executionTime: Date;
   exitTime?: Date;
@@ -33,122 +36,71 @@ export interface ITrade extends Document {
 
 const TradeSchema = new Schema<ITrade>(
   {
+    user: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: [true, 'A trade must belong to a user'],
+    },
     asset: {
       type: String,
-      required: [true, 'Asset pair (e.g. EURUSD) is required'],
+      required: [true, 'Asset pair (e.g. AUDJPY) is required'],
       trim: true,
       uppercase: true,
     },
     direction: {
       type: String,
       enum: ['LONG', 'SHORT'],
-      required: [true, 'Trade direction (LONG or SHORT) is required'],
+      required: [true, 'Trade direction is required'],
     },
-    entryPrice: {
-      type: Number,
-      required: [true, 'Entry price is required'],
+    entryPrice: { type: Number, required: true },
+    stopLoss: { type: Number, required: true },
+    takeProfit: { type: Number, required: true },
+    exitPrice: { type: Number },
+    lotSize: { 
+      type: Number, 
+      required: [true, 'Lot size/Volume is required for statistical uniformity'] 
     },
-    stopLoss: {
-      type: Number,
-      required: [true, 'Stop loss is required'],
+    riskPercentage: { 
+      type: Number, 
+      required: [true, 'Risk percentage is required for calculation validation'],
+      default: 1 
     },
-    takeProfit: {
-      type: Number,
-      required: [true, 'Take profit is required'],
-    },
-    exitPrice: {
-      type: Number,
-    },
-    positionSize: {
-      type: Number,
-    },
-    riskPercentage: {
-      type: Number,
-    },
-    pnl: {
-      type: Number,
-    },
-    realizedRR: {
-      type: Number,
-    },
-    plannedRR: {
-      type: Number,
-    },
-    setupType: {
+    pnl: { type: Number, default: 0 },
+    realizedRR: { type: Number, default: 0 },
+    plannedRR: { type: Number, default: 0 },
+    status: {
       type: String,
-      required: [true, 'Setup type is required'],
-      trim: true,
+      enum: ['OPEN', 'CLOSED', 'CANCELED'],
+      default: 'OPEN',
     },
-    timeframe: {
+    setupType: { type: String, required: true, trim: true },
+    timeframe: { type: String, required: true },
+    tradingSession: {
       type: String,
-      required: [true, 'Timeframe is required'],
+      enum: ['ASIA', 'LONDON', 'NEW_YORK', 'CRYPTO_24_7'],
+      required: [true, 'Trading Session helps track your contextual edge'],
     },
-    smcElements: {
-      type: [String],
-      default: [],
-    },
-    htfBias: {
-      type: String,
-      enum: ['BULLISH', 'BEARISH', 'NEUTRAL'],
-      required: [true, 'HTF Bias is required'],
-    },
-    preTradeMood: {
-      type: String,
-      required: [true, 'Pre-trade mood is required'],
-      trim: true,
-    },
-    inTradeEmotion: {
-      type: String,
-      trim: true,
-    },
-    disciplineScore: {
-      type: Number,
-      required: [true, 'Discipline score (1-5) is required'],
-      min: 1,
-      max: 5,
-    },
-    confidenceLevel: {
-      type: String,
-      enum: ['LOW', 'MEDIUM', 'HIGH'],
-      required: [true, 'Confidence level is required'],
-    },
-    adheredToPlan: {
-      type: Boolean,
-      required: [true, 'Adherence to plan is required'],
-    },
-    exitReason: {
-      type: String,
-      trim: true,
-    },
-    notes: {
-      type: String,
-      trim: true,
-    },
-    screenshots: {
-      type: [String],
-      default: [],
-    },
-    tags: {
-      type: [String],
-      default: [],
-    },
-    executionTime: {
-      type: Date,
-      required: [true, 'Execution time is required'],
-      default: Date.now,
-    },
-    exitTime: {
-      type: Date,
-    },
+    smcElements: { type: [String], default: [] },
+    htfBias: { type: String, enum: ['BULLISH', 'BEARISH', 'NEUTRAL'], required: true },
+    preTradeMood: { type: String, required: true, trim: true },
+    inTradeEmotion: { type: String, trim: true },
+    disciplineScore: { type: Number, required: true, min: 1, max: 5 },
+    confidenceLevel: { type: String, enum: ['LOW', 'MEDIUM', 'HIGH'], required: true },
+    adheredToPlan: { type: Boolean, required: true },
+    exitReason: { type: String, trim: true },
+    notes: { type: String, trim: true },
+    screenshots: { type: [String], default: [] },
+    tags: { type: [String], default: [] },
+    executionTime: { type: Date, required: true, default: Date.now },
+    exitTime: { type: Date },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-// Calculate planned Risk-to-Reward before saving
-TradeSchema.pre<ITrade>('save', function (next) {
-  if (this.entryPrice && this.stopLoss && this.takeProfit) {
+// Unified mathematical middleware hook using correct descriptive typing context
+TradeSchema.pre<ITrade>('save', function (this: ITrade, next) {
+  // 1. Calculate planned Risk-to-Reward on initial entry creation
+  if (this.isModified('entryPrice') || this.isModified('stopLoss') || this.isModified('takeProfit')) {
     const risk = Math.abs(this.entryPrice - this.stopLoss);
     const reward = Math.abs(this.takeProfit - this.entryPrice);
     if (risk > 0) {
@@ -156,14 +108,26 @@ TradeSchema.pre<ITrade>('save', function (next) {
     }
   }
 
-  // Calculate realized Risk-to-Reward if exited
-  if (this.entryPrice && this.stopLoss && this.exitPrice) {
-    const risk = Math.abs(this.entryPrice - this.stopLoss);
-    const profit = this.direction === 'LONG' 
-      ? this.exitPrice - this.entryPrice 
-      : this.entryPrice - this.exitPrice;
-    if (risk > 0) {
-      this.realizedRR = parseFloat((profit / risk).toFixed(2));
+  // 2. Trigger calculations strictly when a trade status transitions to CLOSED
+  if (this.isModified('status') && this.status === 'CLOSED' && this.exitPrice) {
+    const riskAmountPoints = Math.abs(this.entryPrice - this.stopLoss);
+    
+    if (riskAmountPoints > 0) {
+      const pointDifference = this.direction === 'LONG' 
+        ? this.exitPrice - this.entryPrice 
+        : this.entryPrice - this.exitPrice;
+      
+      // Calculate Realized R-Multiple
+      this.realizedRR = parseFloat((pointDifference / riskAmountPoints).toFixed(2));
+      
+      // Approximate financial impact based on your fixed risk targets 
+      // (Optional calculation helper: maps your realized R-Multiple straight to raw dollar metrics)
+      if (this.pnl === 0 || !this.pnl) {
+         // Assuming you risk a set dollar balance baseline, or calculate dynamically via execution controller
+         // If you populate PnL directly from your broker history API later, this serves as a solid structural fallback
+         const baselineRiskUsd = 100; // Place your model strategy baseline here
+         this.pnl = parseFloat((this.realizedRR * baselineRiskUsd).toFixed(2));
+      }
     }
   }
 
