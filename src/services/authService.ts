@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { User, IUser } from '../models/user';
 import { AppError } from '../utils/appError';
+import { sendEmail } from '../utils/email';
 
 export class AuthService {
   /**
@@ -74,5 +76,76 @@ export class AuthService {
     const token = this.signToken(user._id.toString());
 
     return { user, token };
+  }
+
+  /**
+   * Generate password reset token and send email
+   */
+  public static async forgotPassword(email: string): Promise<string> {
+    const user = await User.findOne({ email });
+    if (!user) {
+      throw new AppError('There is no user with that email address', 404);
+    }
+
+    const resetToken = user.createPasswordResetToken();
+    await user.save({ validateBeforeSave: false });
+
+    // Assuming the frontend URL runs on port 3000 locally
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
+
+    const message = `Forgot your password? Click here to reset it:\n${resetUrl}\nIf you didn't forget your password, please ignore this email!`;
+
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: 'Your password reset token (valid for 10 min)',
+        message,
+      });
+
+      return 'Token sent to email!';
+    } catch (err) {
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpires = undefined;
+      await user.save({ validateBeforeSave: false });
+
+      console.error('Email error:', err);
+      throw new AppError('There was an error sending the email. Try again later!', 500);
+    }
+  }
+
+  /**
+   * Reset password using token
+   */
+  public static async resetPassword(token: string, newPassword: string): Promise<{ user: IUser; token: string }> {
+    // 1) Get user based on the token
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest('hex');
+
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: { $gt: Date.now() },
+    });
+
+    // 2) If token has not expired, and there is user, set the new password
+    if (!user) {
+      throw new AppError('Token is invalid or has expired', 400);
+    }
+
+    user.password = newPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    
+    // Save new password (will trigger pre-save hook for hashing)
+    await user.save();
+
+    user.password = undefined;
+
+    // 3) Log the user in, send JWT
+    const jwtToken = this.signToken(user._id.toString());
+    
+    return { user, token: jwtToken };
   }
 }

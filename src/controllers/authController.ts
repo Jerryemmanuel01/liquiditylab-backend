@@ -31,3 +31,30 @@ export const login = asyncHandler(async (req: Request, res: Response, next: Next
     },
   });
 });
+
+// @desc    Forgot password
+// @route   POST /api/auth/forgot-password
+// @access  Public
+export const forgotPassword = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  const message = await AuthService.forgotPassword(req.body.email);
+
+  res.status(200).json({
+    status: 'success',
+    message,
+  });
+});
+
+// @desc    Reset password
+// @route   PATCH /api/auth/reset-password/:token
+// @access  Public
+export const resetPassword = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  const { user, token } = await AuthService.resetPassword(req.params.token, req.body.password);
+
+  res.status(200).json({
+    status: 'success',
+    token,
+    data: {
+      user,
+    },
+  });
+});

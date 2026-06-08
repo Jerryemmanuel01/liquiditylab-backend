@@ -1,11 +1,15 @@
 import { Schema, model, Document } from 'mongoose';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 export interface IUser extends Document {
   username: string;
   email: string;
   password?: string;
+  resetPasswordToken?: string;
+  resetPasswordExpires?: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
+  createPasswordResetToken(): string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -36,6 +40,8 @@ const UserSchema = new Schema<IUser>(
       minlength: [8, 'Password must be at least 8 characters long'],
       select: false, // Don't return password in query results by default
     },
+    resetPasswordToken: String,
+    resetPasswordExpires: Date,
   },
   {
     timestamps: true,
@@ -63,6 +69,21 @@ UserSchema.methods.comparePassword = async function (
 ): Promise<boolean> {
   if (!this.password) return false;
   return await bcrypt.compare(candidatePassword, this.password);
+};
+
+// Instance method to create reset token
+UserSchema.methods.createPasswordResetToken = function (): string {
+  const resetToken = crypto.randomBytes(32).toString('hex');
+
+  this.resetPasswordToken = crypto
+    .createHash('sha256')
+    .update(resetToken)
+    .digest('hex');
+
+  // Set expiration to 10 minutes from now
+  this.resetPasswordExpires = new Date(Date.now() + 10 * 60 * 1000);
+
+  return resetToken;
 };
 
 export const User = model<IUser>('User', UserSchema);
