@@ -1,34 +1,29 @@
 import { Router } from 'express';
 import {
   createTrade,
-  getAllTrades,
-  getTrade,
+  getTrades,
+  getTradeById,
   updateTrade,
   deleteTrade,
-  closeTrade,
   getTradeStats,
+  getCalendarStats
 } from '../controllers/tradeController';
 import { protect } from '../middleware/auth';
-import { validate } from '../middleware/validate';
-import { CreateTradeValidation, CloseTradeValidation } from '../validations/tradeValidation';
 
 const router = Router();
 
-// Protect all trade endpoints with authentication middleware
+// Protect all trade routes
 router.use(protect);
 
-// Stats must be defined before ID routes to prevent it from matching as an ID parameter
-router.route('/stats').get(getTradeStats);
-
 router.route('/')
-  .post(validate(CreateTradeValidation), createTrade)
-  .get(getAllTrades);
+  .post(createTrade)
+  .get(getTrades);
 
-router.route('/:id/close')
-  .patch(validate(CloseTradeValidation), closeTrade);
+router.get('/stats', getTradeStats);
+router.get('/calendar', getCalendarStats);
 
 router.route('/:id')
-  .get(getTrade)
+  .get(getTradeById)
   .patch(updateTrade)
   .delete(deleteTrade);
 

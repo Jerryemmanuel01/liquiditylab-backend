@@ -1,134 +1,116 @@
 import { Request, Response, NextFunction } from 'express';
-import { TradeService } from '../services/tradeService';
+import { tradeService } from '../services/tradeService';
 import { asyncHandler } from '../utils/asyncHandler';
-import { AppError } from '../utils/appError';
 
-// @desc    Create a new trade experiment
-// @route   POST /api/trades
-// @access  Private
 export const createTrade = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-  const userId = req.user!.id;
-  const newTrade = await TradeService.createTrade(req.body, userId);
+  const trade = await tradeService.createTrade(req.user!.id, req.body);
+  
   res.status(201).json({
     status: 'success',
     data: {
-      trade: newTrade,
-    },
+      trade
+    }
   });
 });
 
-// @desc    Get all trades with filtering, sorting, and pagination
-// @route   GET /api/trades
-// @access  Private
-export const getAllTrades = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-  const userId = req.user!.id;
-
-  // Simple filtering
-  const queryObj = { ...req.query };
-  const excludeFields = ['page', 'sort', 'limit', 'fields'];
-  excludeFields.forEach((el) => delete queryObj[el]);
-
-  const sort = req.query.sort as string | undefined;
-  const page = parseInt(req.query.page as string, 10) || 1;
-  const limit = parseInt(req.query.limit as string, 10) || 20;
-
-  const { trades, total } = await TradeService.getAllTrades(queryObj, sort, page, limit, userId);
-
+export const getTrades = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  const filters = {
+    strategyId: req.query.strategyId as string,
+    startDate: req.query.startDate as string,
+    endDate: req.query.endDate as string
+  };
+  
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 10;
+  
+  const result = await tradeService.getTrades(req.user!.id, filters, page, limit);
+  
   res.status(200).json({
     status: 'success',
-    results: trades.length,
-    total,
-    page,
-    pages: Math.ceil(total / limit),
-    data: {
-      trades,
-    },
+    data: result.trades,
+    pagination: {
+      totalPages: result.totalPages,
+      currentPage: result.currentPage,
+      totalCount: result.totalCount
+    }
   });
 });
 
-// @desc    Get trade by ID
-// @route   GET /api/trades/:id
-// @access  Private
-export const getTrade = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-  const userId = req.user!.id;
-  const trade = await TradeService.getTradeById(req.params.id, userId);
+export const getTradeStats = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  const stats = await tradeService.getTradeStats(req.user!.id);
+  res.status(200).json({
+    status: 'success',
+    data: stats
+  });
+});
 
-  if (!trade) {
-    return next(new AppError('No trade found with that ID or you do not have permission', 404));
+export const getCalendarStats = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  const year = parseInt(req.query.year as string);
+  const month = parseInt(req.query.month as string);
+
+  if (isNaN(year) || isNaN(month)) {
+    return res.status(400).json({
+      status: 'fail',
+      message: 'Year and month are required query parameters'
+    });
   }
 
+  const calendarStats = await tradeService.getCalendarStats(req.user!.id, year, month);
+  
   res.status(200).json({
     status: 'success',
-    data: {
-      trade,
-    },
+    data: calendarStats
   });
 });
 
-// @desc    Update a trade
-// @route   PATCH /api/trades/:id
-// @access  Private
+export const getTradeById = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  const trade = await tradeService.getTradeById(req.user!.id, req.params.id);
+  
+  if (!trade) {
+    return res.status(404).json({
+      status: 'fail',
+      message: 'Trade not found'
+    });
+  }
+  
+  res.status(200).json({
+    status: 'success',
+    data: {
+      trade
+    }
+  });
+});
+
 export const updateTrade = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-  const userId = req.user!.id;
-  const trade = await TradeService.updateTrade(req.params.id, req.body, userId);
-
+  const trade = await tradeService.updateTrade(req.user!.id, req.params.id, req.body);
+  
   if (!trade) {
-    return next(new AppError('No trade found with that ID or you do not have permission', 404));
+    return res.status(404).json({
+      status: 'fail',
+      message: 'Trade not found'
+    });
   }
-
+  
   res.status(200).json({
     status: 'success',
     data: {
-      trade,
-    },
+      trade
+    }
   });
 });
 
-// @desc    Delete a trade
-// @route   DELETE /api/trades/:id
-// @access  Private
 export const deleteTrade = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-  const userId = req.user!.id;
-  const trade = await TradeService.deleteTrade(req.params.id, userId);
-
-  if (!trade) {
-    return next(new AppError('No trade found with that ID or you do not have permission', 404));
+  const success = await tradeService.deleteTrade(req.user!.id, req.params.id);
+  
+  if (!success) {
+    return res.status(404).json({
+      status: 'fail',
+      message: 'Trade not found'
+    });
   }
-
+  
   res.status(204).json({
     status: 'success',
-    data: null,
-  });
-});
-
-// @desc    Close an active trade position
-// @route   PATCH /api/trades/:id/close
-// @access  Private
-export const closeTrade = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-  const userId = req.user!.id;
-  const trade = await TradeService.closeTrade(req.params.id, req.body, userId);
-
-  if (!trade) {
-    return next(new AppError('No trade found with that ID or you do not have permission', 404));
-  }
-
-  res.status(200).json({
-    status: 'success',
-    data: {
-      trade,
-    },
-  });
-});
-
-// @desc    Get trade analytics (Edge vs Psychology stats)
-// @route   GET /api/trades/stats
-// @access  Private
-export const getTradeStats = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-  const userId = req.user!.id;
-  const stats = await TradeService.getTradeStats(userId);
-
-  res.status(200).json({
-    status: 'success',
-    data: stats,
+    data: null
   });
 });

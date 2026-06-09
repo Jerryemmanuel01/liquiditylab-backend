@@ -2,7 +2,8 @@ import { Schema, model, Document, Types } from 'mongoose';
 
 export interface ITrade extends Document {
   user: Types.ObjectId | string;
-  asset: string;
+  strategy: Types.ObjectId | string;
+  asset: Types.ObjectId | string;
   direction: 'LONG' | 'SHORT';
   entryPrice: number;
   stopLoss: number;
@@ -11,10 +12,10 @@ export interface ITrade extends Document {
   lotSize: number; // Strictly contracts/lots for uniform calculation
   riskPercentage: number; // e.g., 1 for 1%
   pnl?: number; // Automated calculated monetary profit/loss
+  actualPnl?: number; // Manual override for actual broker PnL
   realizedRR?: number; // Automated realized R-multiple
   plannedRR?: number; // Automated planned R-multiple
   status: 'OPEN' | 'CLOSED' | 'CANCELED';
-  setupType: string; // e.g., 'Silver Bullet', 'Turtle Soup'
   timeframe: '1m' | '5m' | '15m' | '1h' | '4h' | '1d' | string;
   tradingSession: 'ASIA' | 'LONDON' | 'NEW_YORK' | 'CRYPTO_24_7';
   smcElements: string[]; 
@@ -41,11 +42,15 @@ const TradeSchema = new Schema<ITrade>(
       ref: 'User',
       required: [true, 'A trade must belong to a user'],
     },
+    strategy: {
+      type: Schema.Types.ObjectId,
+      ref: 'Strategy',
+      required: [true, 'A trade must be linked to a strategy'],
+    },
     asset: {
-      type: String,
-      required: [true, 'Asset pair (e.g. AUDJPY) is required'],
-      trim: true,
-      uppercase: true,
+      type: Schema.Types.ObjectId,
+      ref: 'Asset',
+      required: [true, 'Asset is required'],
     },
     direction: {
       type: String,
@@ -65,7 +70,12 @@ const TradeSchema = new Schema<ITrade>(
       required: [true, 'Risk percentage is required for calculation validation'],
       default: 1 
     },
-    pnl: { type: Number, default: 0 },
+    pnl: {
+      type: Number,
+    },
+    actualPnl: {
+      type: Number,
+    },
     realizedRR: { type: Number, default: 0 },
     plannedRR: { type: Number, default: 0 },
     status: {
@@ -73,7 +83,6 @@ const TradeSchema = new Schema<ITrade>(
       enum: ['OPEN', 'CLOSED', 'CANCELED'],
       default: 'OPEN',
     },
-    setupType: { type: String, required: true, trim: true },
     timeframe: { type: String, required: true },
     tradingSession: {
       type: String,

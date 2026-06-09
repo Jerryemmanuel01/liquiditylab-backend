@@ -2,18 +2,13 @@ import { Schema, model, Document } from 'mongoose';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
-export interface IUserSettings {
-  baselineCapital: number;
-  tradingPairs: string[];
-}
-
 export interface IUser extends Document {
   username: string;
   email: string;
   password?: string;
   resetPasswordToken?: string;
   resetPasswordExpires?: Date;
-  settings: IUserSettings;
+  baselineCapital: number;
   comparePassword(candidatePassword: string): Promise<boolean>;
   createPasswordResetToken(): string;
   createdAt: Date;
@@ -48,15 +43,9 @@ const UserSchema = new Schema<IUser>(
     },
     resetPasswordToken: String,
     resetPasswordExpires: Date,
-    settings: {
-      baselineCapital: {
-        type: Number,
-        default: 10000,
-      },
-      tradingPairs: {
-        type: [String],
-        default: ['EUR/USD', 'GBP/USD', 'XAU/USD', 'BTC/USDT'],
-      },
+    baselineCapital: {
+      type: Number,
+      default: 10000,
     },
   },
   {
