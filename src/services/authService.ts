@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { User, IUser } from '../models/user';
 import { AppError } from '../utils/appError';
 import { sendEmail } from '../utils/email';
+import { getWelcomeTemplate, getPasswordResetTemplate } from '../utils/emailTemplates';
 
 export class AuthService {
   /**
@@ -43,6 +44,14 @@ export class AuthService {
     newUser.password = undefined;
 
     const token = this.signToken(newUser._id.toString());
+
+    // Send Welcome Email asynchronously
+    sendEmail({
+      email: newUser.email,
+      subject: 'Welcome to LiquidityLab - Institutional Trading Platform',
+      message: `Welcome aboard, ${newUser.username}.\nYour institutional-grade dashboard is now ready.`,
+      html: getWelcomeTemplate(newUser.username),
+    }).catch(err => console.error('Error sending welcome email:', err));
 
     return { user: newUser, token };
   }
@@ -99,8 +108,9 @@ export class AuthService {
     try {
       await sendEmail({
         email: user.email,
-        subject: 'Your password reset token (valid for 10 min)',
+        subject: 'Your LiquidityLab password reset token (valid for 10 min)',
         message,
+        html: getPasswordResetTemplate(resetUrl, user.username),
       });
 
       return 'Token sent to email!';
