@@ -27,6 +27,10 @@ export class TradeService {
       query.strategy = new Types.ObjectId(filters.strategyId);
     }
     
+    if (filters.status) {
+      query.status = filters.status;
+    }
+    
     if (filters.startDate || filters.endDate) {
       query.executionTime = {};
       if (filters.startDate) query.executionTime.$gte = new Date(filters.startDate);

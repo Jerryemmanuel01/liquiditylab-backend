@@ -6,6 +6,7 @@ import userRoutes from './userRoutes';
 import strategyRoutes from './strategyRoutes';
 import assetRoutes from './assetRoutes';
 import analyticsRoutes from './analyticsRoutes';
+import journalRoutes from './journalRoutes';
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.use('/strategies', strategyRoutes);
 router.use('/trades', tradeRoutes);
 router.use('/assets', assetRoutes);
 router.use('/analytics', analyticsRoutes);
+router.use('/journals', journalRoutes);
 
 export default router;

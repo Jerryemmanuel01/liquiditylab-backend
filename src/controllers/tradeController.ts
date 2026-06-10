@@ -17,7 +17,8 @@ export const getTrades = asyncHandler(async (req: Request, res: Response, next: 
   const filters = {
     strategyId: req.query.strategyId as string,
     startDate: req.query.startDate as string,
-    endDate: req.query.endDate as string
+    endDate: req.query.endDate as string,
+    status: req.query.status as string
   };
   
   const page = parseInt(req.query.page as string) || 1;
