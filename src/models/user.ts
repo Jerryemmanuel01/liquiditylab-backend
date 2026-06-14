@@ -9,6 +9,7 @@ export interface IUser extends Document {
   resetPasswordToken?: string;
   resetPasswordExpires?: Date;
   baselineCapital: number;
+  currentBalance: number;
   comparePassword(candidatePassword: string): Promise<boolean>;
   createPasswordResetToken(): string;
   createdAt: Date;
@@ -44,6 +45,10 @@ const UserSchema = new Schema<IUser>(
     resetPasswordToken: String,
     resetPasswordExpires: Date,
     baselineCapital: {
+      type: Number,
+      default: 10000,
+    },
+    currentBalance: {
       type: Number,
       default: 10000,
     },

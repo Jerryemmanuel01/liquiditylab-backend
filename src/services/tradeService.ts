@@ -1,5 +1,6 @@
 import { Trade, ITrade } from '../models/trade';
 import { Asset } from '../models/asset';
+import { User } from '../models/user';
 import { Types } from 'mongoose';
 
 export class TradeService {
@@ -14,7 +15,9 @@ export class TradeService {
     
     await this.calculatePnL(trade);
     
-    return await trade.save();
+    const savedTrade = await trade.save();
+    await this.syncUserBalance(userId);
+    return savedTrade;
   }
 
   /**
@@ -153,7 +156,9 @@ export class TradeService {
     
     await this.calculatePnL(trade);
     
-    return await trade.save();
+    const savedTrade = await trade.save();
+    await this.syncUserBalance(userId);
+    return savedTrade;
   }
 
   /**
@@ -208,7 +213,35 @@ export class TradeService {
       user: new Types.ObjectId(userId)
     });
 
-    return result.deletedCount === 1;
+    if (result.deletedCount === 1) {
+      await this.syncUserBalance(userId);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Helper method to sync user's current balance based on all closed trades
+   */
+  async syncUserBalance(userId: string) {
+    const user = await User.findById(userId);
+    if (!user) return;
+
+    const stats = await Trade.aggregate([
+      { $match: { user: new Types.ObjectId(userId), status: 'CLOSED' } },
+      { 
+        $group: {
+          _id: null,
+          totalPnL: { 
+            $sum: { $ifNull: [ "$actualPnl", "$pnl", 0 ] } 
+          }
+        }
+      }
+    ]);
+
+    const totalPnL = stats.length > 0 ? stats[0].totalPnL : 0;
+    user.currentBalance = user.baselineCapital + totalPnL;
+    await user.save();
   }
 }
 

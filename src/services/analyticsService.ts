@@ -192,4 +192,85 @@ export class AnalyticsService {
       sessionData: sessionAgg
     };
   }
+
+  static async getOverviewDashboard(userId: string) {
+    const userObjectId = new Types.ObjectId(userId);
+    const user = await import('../models/user').then(m => m.User.findById(userId));
+    if (!user) throw new Error('User not found');
+
+    const baselineCapital = user.baselineCapital;
+    
+    // Fetch all closed trades to compute equity curve and basic stats
+    const allClosedTrades = await Trade.find({ user: userObjectId, status: 'CLOSED' })
+      .sort({ executionTime: 1 })
+      .select('executionTime actualPnl pnl realizedRR adheredToPlan preTradeMood')
+      .lean();
+
+    let currentEquity = baselineCapital;
+    let sumRealizedPnL = 0;
+    let winCount = 0;
+    let sumRealizedRR = 0;
+    let capitalLeaked = 0;
+    
+    const equityCurve: any[] = [];
+    const moodMap: Record<string, { heightVal: number, pnl: number }> = {};
+
+    // Generate equity curve and aggregate stats
+    allClosedTrades.forEach(trade => {
+      const pnl = trade.actualPnl !== undefined ? trade.actualPnl : (trade.pnl || 0);
+      const rr = trade.realizedRR || 0;
+      
+      currentEquity += pnl;
+      sumRealizedPnL += pnl;
+      sumRealizedRR += rr;
+
+      if (pnl > 0) winCount++;
+      if (trade.adheredToPlan === false && pnl < 0) {
+        capitalLeaked += Math.abs(pnl);
+      }
+
+      if (trade.executionTime) {
+        // Format date like 'Jan 12'
+        const dateStr = trade.executionTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        equityCurve.push({
+          date: dateStr,
+          value: currentEquity
+        });
+      }
+
+      // Aggregate PnL by Mood
+      if (trade.preTradeMood) {
+        if (!moodMap[trade.preTradeMood]) {
+          moodMap[trade.preTradeMood] = { heightVal: 0, pnl: 0 };
+        }
+        moodMap[trade.preTradeMood].pnl += pnl;
+        moodMap[trade.preTradeMood].heightVal += 1; // Count as height or we can use absolute pnl
+      }
+    });
+
+    const totalTrades = allClosedTrades.length;
+    const winRate = totalTrades > 0 ? (winCount / totalTrades) * 100 : 0;
+    const avgRMultiple = totalTrades > 0 ? sumRealizedRR / totalTrades : 0;
+
+    // Convert moodMap to array
+    const pnlData = Object.keys(moodMap).map(mood => {
+      const data = moodMap[mood];
+      return {
+        state: mood,
+        heightVal: Math.max(10, data.heightVal * 10), // arbitrary scaling for chart height
+        pnl: data.pnl,
+        color: data.pnl >= 0 ? '#10B981' : '#EF4444' // Emerald for profit, Red for loss
+      };
+    });
+
+    return {
+      currentBalance: currentEquity,
+      totalRealizedPnL: sumRealizedPnL,
+      winRate: winRate,
+      avgRMultiple: avgRMultiple,
+      capitalLeaked: capitalLeaked,
+      equityCurve: equityCurve.length > 0 ? equityCurve : [{ date: 'Start', value: baselineCapital }],
+      pnlByMood: pnlData
+    };
+  }
 }
