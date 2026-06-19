@@ -2,16 +2,28 @@ import { Trade } from '../models/trade';
 import { Types } from 'mongoose';
 
 export class AnalyticsService {
-  static async getDashboardAnalytics(userId: string) {
+  static async getDashboardAnalytics(userId: string, duration?: string) {
     const userObjectId = new Types.ObjectId(userId);
 
-    // Common query to only fetch closed trades for the user
-    const matchClosed = {
+    const matchClosed: any = {
       $match: {
         user: userObjectId,
         status: 'CLOSED'
       }
     };
+
+    const query: any = { user: userObjectId, status: 'CLOSED' };
+
+    if (duration && duration !== 'ALL') {
+      const now = new Date();
+      let cutoffDate = new Date();
+      if (duration === '1M') cutoffDate.setMonth(now.getMonth() - 1);
+      else if (duration === '3M') cutoffDate.setMonth(now.getMonth() - 3);
+      else if (duration === 'YTD') cutoffDate = new Date(now.getFullYear(), 0, 1);
+      
+      matchClosed.$match.executionTime = { $gte: cutoffDate };
+      query.executionTime = { $gte: cutoffDate };
+    }
 
     // Calculate effective PnL for each trade ($ifNull checks if actualPnl exists)
     const addEffectiveFields = {
@@ -26,15 +38,15 @@ export class AnalyticsService {
     // --- 1. Core Metrics & Time-Efficiency (Scatter Plot) ---
     // We can fetch the raw array of trades to compute Max Drawdown and Scatter Plot, 
     // because Max Drawdown requires chronological ordering which is tricky in pure $group.
-    const allClosedTrades = await Trade.find({ user: userObjectId, status: 'CLOSED' })
+    const allClosedTrades = await Trade.find(query)
       .sort({ executionTime: 1 })
-      .select('executionTime exitTime actualPnl pnl realizedRR')
+      .select('executionTime exitTime actualPnl pnl realizedRR updatedAt')
       .lean();
 
     let peakEquity = 0;
     let currentEquity = 0;
     let maxDrawdownValue = 0;
-    let maxDrawdownPct = 0; // Relative to peak equity (we'll assume a starting balance or just calculate absolute drop)
+    let maxDrawdownPct = 0; 
     let sumRealizedRR = 0;
     let sumGrossProfit = 0;
     let sumGrossLoss = 0;
@@ -43,16 +55,24 @@ export class AnalyticsService {
     let sumWinningPnl = 0;
     let sumLosingPnl = 0;
     
+    let sumWinDuration = 0;
+    let sumLossDuration = 0;
+
     const scatterData: any[] = [];
 
     allClosedTrades.forEach(trade => {
       const pnl = trade.actualPnl !== undefined ? trade.actualPnl : (trade.pnl || 0);
       const rr = trade.realizedRR || 0;
       
-      // For Scatter Plot
-      if (trade.executionTime && trade.exitTime) {
-        const durationMinutes = (new Date(trade.exitTime).getTime() - new Date(trade.executionTime).getTime()) / (1000 * 60);
-        scatterData.push({ duration: Math.max(1, Math.round(durationMinutes)), profit: pnl });
+      // For Scatter Plot & Time Efficiency
+      const exitDate = trade.exitTime || trade.updatedAt;
+      if (trade.executionTime && exitDate) {
+        const durationMinutes = (new Date(exitDate).getTime() - new Date(trade.executionTime).getTime()) / (1000 * 60);
+        const duration = Math.max(1, Math.round(durationMinutes));
+        scatterData.push({ duration, profit: pnl });
+
+        if (pnl > 0) sumWinDuration += duration;
+        else if (pnl < 0) sumLossDuration += duration;
       }
 
       // For Core Metrics
@@ -78,6 +98,9 @@ export class AnalyticsService {
         lossCount++;
       }
     });
+
+    const avgWinDuration = winCount > 0 ? Math.round(sumWinDuration / winCount) : 0;
+    const avgLossDuration = lossCount > 0 ? Math.round(sumLossDuration / lossCount) : 0;
 
     const totalTrades = allClosedTrades.length;
     const systemExpectancy = totalTrades > 0 ? sumRealizedRR / totalTrades : 0;
@@ -180,6 +203,10 @@ export class AnalyticsService {
         maxDrawdownPct: maxDrawdownPctCalc
       },
       scatterData,
+      timeEfficiencyStats: {
+        avgWinDuration,
+        avgLossDuration
+      },
       moodData: moodAgg.map(m => ({
         mood: m._id || 'Unknown',
         avgRR: m.avgRR || 0
@@ -234,6 +261,7 @@ export class AnalyticsService {
         const dateStr = trade.executionTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         equityCurve.push({
           date: dateStr,
+          timestamp: trade.executionTime.getTime(),
           value: currentEquity
         });
       }

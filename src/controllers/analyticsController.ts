@@ -9,7 +9,8 @@ export const getDashboardAnalytics = async (req: Request, res: Response): Promis
       return;
     }
 
-    const data = await AnalyticsService.getDashboardAnalytics(userId);
+    const duration = req.query.duration as string;
+    const data = await AnalyticsService.getDashboardAnalytics(userId, duration);
 
     res.status(200).json({
       success: true,

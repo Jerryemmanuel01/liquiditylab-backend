@@ -166,13 +166,19 @@ export class TradeService {
    */
   private async calculatePnL(trade: any) {
     // Auto-fill exit price based on exit reason if not provided
-    if (trade.status === 'CLOSED' && !trade.exitPrice && trade.exitReason) {
-      if (trade.exitReason === 'HIT_TP' && trade.takeProfit) {
-        trade.exitPrice = trade.takeProfit;
-      } else if (trade.exitReason === 'HIT_SL' && trade.stopLoss) {
-        trade.exitPrice = trade.stopLoss;
-      } else if (trade.exitReason === 'BREAKEVEN') {
-        trade.exitPrice = trade.entryPrice;
+    if (trade.status === 'CLOSED') {
+      if (!trade.exitTime) {
+        trade.exitTime = new Date();
+      }
+      
+      if (!trade.exitPrice && trade.exitReason) {
+        if (trade.exitReason === 'HIT_TP' && trade.takeProfit) {
+          trade.exitPrice = trade.takeProfit;
+        } else if (trade.exitReason === 'HIT_SL' && trade.stopLoss) {
+          trade.exitPrice = trade.stopLoss;
+        } else if (trade.exitReason === 'BREAKEVEN') {
+          trade.exitPrice = trade.entryPrice;
+        }
       }
     }
 
