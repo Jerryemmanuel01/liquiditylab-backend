@@ -8,6 +8,13 @@ export class TradeService {
    * Create a new trade entry
    */
   async createTrade(userId: string, data: Partial<ITrade>): Promise<ITrade> {
+    const user = await User.findById(userId);
+    if (!user) throw new Error('User not found');
+
+    if (user.lockedUntil && new Date() < user.lockedUntil) {
+      throw new Error(`Circuit breaker active until ${user.lockedUntil.toISOString()}`);
+    }
+
     const trade = new Trade({
       ...data,
       user: new Types.ObjectId(userId)
@@ -248,6 +255,54 @@ export class TradeService {
     const totalPnL = stats.length > 0 ? stats[0].totalPnL : 0;
     user.currentBalance = user.baselineCapital + totalPnL;
     await user.save();
+    
+    // Evaluate circuit breakers after syncing balance
+    await this.evaluateCircuitBreaker(userId);
+  }
+
+  /**
+   * Evaluate if the user has breached daily drawdown or consecutive loss limits
+   */
+  async evaluateCircuitBreaker(userId: string) {
+    const user = await User.findById(userId);
+    if (!user) return;
+
+    // 1. Daily Drawdown Check
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const todayTrades = await Trade.find({
+      user: new Types.ObjectId(userId),
+      status: 'CLOSED',
+      executionTime: { $gte: startOfDay, $lte: endOfDay }
+    });
+
+    const todayPnL = todayTrades.reduce((sum, t) => sum + (t.actualPnl ?? t.pnl ?? 0), 0);
+    const maxDrawdownAmount = (user.maxDailyDrawdown / 100) * user.baselineCapital;
+
+    if (user.maxDailyDrawdown > 0 && todayPnL < 0 && Math.abs(todayPnL) >= maxDrawdownAmount) {
+      user.lockedUntil = new Date(Date.now() + user.inactivityDuration * 60 * 60 * 1000);
+      await user.save();
+      return; // Lock triggered, no need to check further
+    }
+
+    // 2. Consecutive Losses Check
+    if (user.maxConsecutiveLosses > 0) {
+      const recentTrades = await Trade.find({
+        user: new Types.ObjectId(userId),
+        status: 'CLOSED'
+      }).sort({ executionTime: -1 }).limit(user.maxConsecutiveLosses);
+
+      if (recentTrades.length === user.maxConsecutiveLosses) {
+        const allLosses = recentTrades.every(t => (t.actualPnl ?? t.pnl ?? 0) < 0);
+        if (allLosses) {
+          user.lockedUntil = new Date(Date.now() + user.inactivityDuration * 60 * 60 * 1000);
+          await user.save();
+        }
+      }
+    }
   }
 }
 

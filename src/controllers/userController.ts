@@ -6,16 +6,14 @@ import { asyncHandler } from '../utils/asyncHandler';
 // @route   PATCH /api/users/settings
 // @access  Private
 export const updateSettings = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-  const { baselineCapital } = req.body;
+  const payload = req.body;
 
-  const newCapital = await UserService.updateBaselineCapital(req.user!.id, baselineCapital);
+  const user = await UserService.updateSettings(req.user!.id, payload);
 
   res.status(200).json({
     status: 'success',
     data: {
-      settings: {
-        baselineCapital: newCapital
-      }
+      settings: user
     }
   });
 });
@@ -24,14 +22,12 @@ export const updateSettings = asyncHandler(async (req: Request, res: Response, n
 // @route   GET /api/users/settings
 // @access  Private
 export const getSettings = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-  const capital = await UserService.getBaselineCapital(req.user!.id);
+  const user = await UserService.getSettings(req.user!.id);
 
   res.status(200).json({
     status: 'success',
     data: {
-      settings: {
-        baselineCapital: capital
-      }
+      settings: user
     }
   });
 });

@@ -10,6 +10,18 @@ export interface IUser extends Document {
   resetPasswordExpires?: Date;
   baselineCapital: number;
   currentBalance: number;
+  phoneNumber?: string;
+  avatar?: string;
+  inactivityDuration: number;
+  maxDailyDrawdown: number;
+  maxConsecutiveLosses: number;
+  lockedUntil?: Date;
+  defaultTimezone: string;
+  baseCurrency: string;
+  theme: string;
+  mt5Connected: boolean;
+  cTraderConnected: boolean;
+  tradeLockerConnected: boolean;
   comparePassword(candidatePassword: string): Promise<boolean>;
   createPasswordResetToken(): string;
   createdAt: Date;
@@ -44,14 +56,28 @@ const UserSchema = new Schema<IUser>(
     },
     resetPasswordToken: String,
     resetPasswordExpires: Date,
-    baselineCapital: {
-      type: Number,
-      default: 10000,
-    },
-    currentBalance: {
-      type: Number,
-      default: 10000,
-    },
+    
+    // Account Profile
+    phoneNumber: { type: String, trim: true },
+    avatar: { type: String },
+
+    // Risk Parameters
+    baselineCapital: { type: Number, default: 10000 },
+    currentBalance: { type: Number, default: 10000 },
+    inactivityDuration: { type: Number, default: 24 },
+    maxDailyDrawdown: { type: Number, default: 1.0 },
+    maxConsecutiveLosses: { type: Number, default: 3 },
+    lockedUntil: { type: Date, default: null },
+
+    // Workspace Preferences
+    defaultTimezone: { type: String, default: 'WAT' },
+    baseCurrency: { type: String, default: 'USD' },
+    theme: { type: String, default: 'Light', enum: ['Light', 'Dark', 'Auto'] },
+
+    // Integrations
+    mt5Connected: { type: Boolean, default: false },
+    cTraderConnected: { type: Boolean, default: false },
+    tradeLockerConnected: { type: Boolean, default: false },
   },
   {
     timestamps: true,
